@@ -1,0 +1,38 @@
+Toribash move evolver
+
+Organized like this:
+src/
+ *.lua - scripts to be executed from options/scripts/...
+ evolve/
+  evolib.lua - general functions for population management, simulation running
+  GA.lua     - genetic algorithm main part - run_GA()
+  GA_default.lua - default configuration for GA
+  show_population.lua - population (or best.txt) viewer and browser
+
+The basic principle is:
+ * get default conf from GA_default.lua
+ * run_GA(conf) for a while
+  * loops over whole population, applying GA when each individual has run
+  * produces bestfile (with all new best performers during the run)
+  * and population file (with the whole population)
+  * suggestion - press 'v' to disable uke, tori and hud + minimize the window
+ * run show_population(file) to view the results
+  * save any replays or study the moves
+
+Different runs produce different results, you will usually get *something* in
+about 10 minutes or so.
+
+Current GA is not so good with long combos, specializes on one move.
+
+TODO ideas:
+ * enhance GA
+  * more generic move format - do not have a particular number of "moves"
+  * track the "mutability" of values which in turn are mutable to allow
+    some parts of genome to become more stable?
+  * individual ages
+   * allow mediocre performers evolve longer (more diversity)
+   * discourage everyone becoming the same as elites
+ * GA the GA - run multiple populations in parallel with different params
+ * more interesting fitness functions
+  * based on move cost - to encourage weeding out needles movements
+ * output population stats for plotting - to see which GA strategies are better
