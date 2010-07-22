@@ -51,14 +51,18 @@ local function end_round()
          bestfit = best_indiv.fitness
       end
 
-      -- save the population
-      evolib.save_pop(pop, conf.popFile)
-         
+      -- save some population statistics
+      max, p90, p75, p50, p25, avg = evolib.pop_stats(pop)
+      evolib.append_file(conf.statFile, string.format("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f", max, p90, p75, p50, p25, avg))
+
       -- GA steps
       -- kill some individuals
       evolib.trunc_pop(pop, conf)
       -- replace them
       evolib.grow_pop(pop, conf)
+
+      -- save the population
+      evolib.save_pop(pop, conf.popFile)
 
       if conf.forever then
          -- start from first one again

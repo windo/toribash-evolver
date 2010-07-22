@@ -121,6 +121,10 @@ function P.copy_indiv(indiv)
    return P.new_indiv(indiv.fitness, jVals)
 end
 
+--[[
+Misc
+]]--
+
 -- append one record to a file
 function P.append_file(filename, string)
    filename = datapath..filename
@@ -164,12 +168,14 @@ end
 --[[
 Population management
 ]]--
+-- prints a population
 function P.print_pop(pop)
    for i, indiv in ipairs(pop) do 
       P.debug(i.." fitness "..indiv.fitness, "value: "..table.concat(indiv.jVals, ",")) 
    end
 end
 
+-- saves a population to a file
 function P.save_pop(pop, filename)
    filename = datapath..filename
    P.debug("Saving population to "..filename)
@@ -185,15 +191,13 @@ function P.save_pop(pop, filename)
    f:close()
 end
 
+-- sorts a population by fitness
 local function sorter(a, b) return a.fitness > b.fitness end
 function P.sort_pop(pop)
    table.sort(pop, sorter)
 end
 
---[[
-creates a population of popsize, initialising 
-them to 0 fitness and random jVals
---]]
+--creates a random population
 function P.rand_pop(size, moves)
    P.debug("Creating random population of "..size)
    pop = {}
@@ -224,6 +228,23 @@ function P.load_pop(filename)
    f:close()
    P.debug("Got "..#pop.." individuals")
    return pop
+end
+
+-- calculate some stats about the population
+function P.pop_stats(pop)
+   -- assume the stats are sorted
+   local max = pop[1].fitness
+   local p90 = pop[math.floor(0.1 * #pop)].fitness
+   local p75 = pop[math.floor(0.25 * #pop)].fitness
+   local p50 = pop[math.floor(0.5 * #pop)].fitness
+   local p25 = pop[math.floor(0.75 * #pop)].fitness
+   local avg = 0
+   -- find average
+   for i, indiv in ipairs(pop) do
+      avg = avg + indiv.fitness
+   end
+   avg = avg / #pop
+   return max, p90, p75, p50, p25, avg
 end
 
 --[[
@@ -279,7 +300,6 @@ end
 function _lookaside.save(self, indiv)
    idx = self:find(indiv)
    if idx == nil then
-      P.debug("Adding individual to lookaside")
       -- Not in yet, make a copy (in case it gets mutated) and add
       local c_indiv = P.copy_indiv(indiv)
       table.insert(self.cache, 1, c_indiv)
@@ -291,9 +311,7 @@ function _lookaside.save(self, indiv)
 end
 
 --[[
-Fitness functions
-
-Listed below are a couple of fitness functions.
+Fitness functions - different variants
 ]]--
 
 P.get_fitness = {}

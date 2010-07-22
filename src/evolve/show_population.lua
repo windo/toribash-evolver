@@ -37,11 +37,11 @@ function show_population(fileName, mod)
    -- initialize
    evolib.info("Loading population from: "..fileName)
    pop = evolib.load_pop(fileName)
-   evolib.info("Loaded "..#pop.." individuals")
    if not pop then
-      evolib.info("Best individuals file not present, fail...")
+      evolib.info("Population file not present, fail...")
       return
    end
+   evolib.info("Loaded "..#pop.." individuals")
    
    evolib.debug("Adding hooks")
    add_hook("new_game", "evolve", start_game)
