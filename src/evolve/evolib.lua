@@ -30,12 +30,7 @@ local function simulation_next_turn()
 end
 
 -- Trigger a simulation
-function P.play_indiv(indiv, mod)
-   -- select right mod
-   if mod == nil then mod = "classic" end
-   -- TODO: can't do here, triggers new game
-   -- run_cmd("loadmod "..mod)
-   
+function P.play_indiv(indiv)
    -- setup simulation
    local s = Simulation
    s.rules = get_game_rules()
@@ -59,8 +54,12 @@ function P.make_move(jVals, move)
       end
       i = i + 1
    end
-   set_grip_info(0, BODYPARTS.L_HAND, jVals[offset + moveLength - 1] % 3)
-   set_grip_info(0, BODYPARTS.R_HAND, jVals[offset + moveLength] % 3)
+   if jVals[offset + moveLength - 1] ~= 0 then
+      set_grip_info(0, BODYPARTS.L_HAND, jVals[offset + moveLength - 1] % 3)
+   end
+   if jVals[offset + moveLength] ~= 0 then
+      set_grip_info(0, BODYPARTS.R_HAND, jVals[offset + moveLength] % 3)
+   end
 end
 
 
@@ -73,8 +72,10 @@ local _indiv = {}
 function P.new_indiv(fitness, jVals)
    local _i = {}
    if fitness == nil then fitness = minfitness end
+   -- data
    _i.fitness = fitness
    _i.jVals = jVals
+   -- methods
    _i.get_movecount = _indiv.get_movecount
    _i.format = _indiv.format
    return _i
@@ -168,6 +169,7 @@ end
 --[[
 Population management
 ]]--
+
 -- prints a population
 function P.print_pop(pop)
    for i, indiv in ipairs(pop) do 
@@ -377,8 +379,9 @@ end
 GA updating functions
 ]]--
 
---Mutate the individual by randomly chosing a new int with probability p_mut. Works per codon.
+-- Mutate the individual by randomly chosing a new int with probability p_mut. Works per codon.
 function P.intflip_mutation(jVals, mutaSize)
+   assert(jVals ~= nil)
    local mutations = math.random() * mutaSize
    for i = 1, mutations do
        jVals[math.floor(math.random() * #jVals) + 1] = math.random(0, 4)
@@ -388,13 +391,33 @@ end
 -- Given two individuals, create a child using one-point crossover.
 function P.onepoint_crossover(p, q)
    assert(#p == #q)
-   point = math.random(1, #p)
+   p1 = math.random(1, #p)
    c = {}
-   for i = 1, point do
-      table.insert(c, p[i])
-   end
-   for i = point + 1, #q do
-	    table.insert(c, q[i])
+   for i = 1     , p1 do table.insert(c, p[i]) end
+   for i = p1 + 1, #q do table.insert(c, q[i]) end
+   return c
+end
+
+function P.twopoint_crossover(p, q)
+   assert(#p == #q)
+   c = {}
+   p1 = math.random(1, #p)
+   p2 = math.random(1, #p)
+   for i = 1     , p1 do table.insert(c, p[i]) end
+   for i = p1 + 1, p2 do table.insert(c, q[i]) end
+   for i = p2 + 1, #q do table.insert(c, p[i]) end
+   return c
+end
+
+function P.uniform_crossover(p, q)
+   assert(#p == #q)
+   c = {}
+   for i = 1, #q do
+      if math.random() < 0.5 then
+         table.insert(c, p[i])
+      else
+         table.insert(c, q[i])
+      end
    end
    return c
 end
@@ -412,7 +435,7 @@ end
 function P.grow_pop(pop, conf)
    P.debug("Filling population from "..#pop.." to "..conf.popSize.." individuals")
    local survivors = #pop
-   local selfsex = true
+   local selfsex = false
 
    -- add random newcomers
    local randoms = conf.randSize * conf.popSize
@@ -433,13 +456,13 @@ function P.grow_pop(pop, conf)
             if ind2 >= ind1 then ind2 = ind2 + 1 end
          end
          -- generate child
-     	   jVals = P.onepoint_crossover(pop[ind1].jVals, pop[ind2].jVals)
+     	   jVals = P.uniform_crossover(pop[ind1].jVals, pop[ind2].jVals)
      	   table.insert(pop, P.new_indiv(nil, jVals))
    end
 
    -- mutate non-elite individuales
    local elite = conf.eliteSize * conf.popSize
-   P.debug("Mutating "..#pop-elite.." individuales (sparing "..elite.." elites)")
+   P.debug("Mutating "..#pop-elite.." individuals (sparing "..elite.." elites)")
    for i = elite + 1, #pop do
        P.intflip_mutation(pop[i].jVals, conf.mutaSize)
        pop[i].fitness = minfitness
