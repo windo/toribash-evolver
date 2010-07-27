@@ -69,15 +69,18 @@ Individual
 
 local _indiv = {}
 -- constructor for an individual
-function P.new_indiv(fitness, jVals)
+function P.new_indiv(jVals, bVals, fitness)
    local _i = {}
    if fitness == nil then fitness = minfitness end
    -- data
    _i.fitness = fitness
-   _i.jVals = jVals
+   _i.jVals  = jVals
+   _i.bVals  = bVals
+   _i.age    = 1
    -- methods
    _i.get_movecount = _indiv.get_movecount
-   _i.format = _indiv.format
+   _i.file_format = _indiv.file_format
+   _i.print_format = _indiv.print_format
    return _i
 end
 
@@ -87,39 +90,53 @@ function _indiv.get_movecount(self)
 end
 
 -- format an individual to be written to file
-function _indiv.format(self)
-   return self.fitness..":"..table.concat(self.jVals, ",")
+function _indiv.file_format(self)
+   return self.fitness..":"..table.concat(self.jVals, ",")..":"..table.concat(self.bVals, ",")
+end
+-- as text
+function _indiv.print_format(self)
+   return "Indiv fitness="..self.fitness..", age="..self.age..", jVals="..table.concat(self.jVals, ", ")..", bVals="..table.concat(self.bVals, ", ")
 end
 
 -- generate random individual
 function P.rand_indiv(moves)
-   jVals = {}
+   local jVals = {}
+   local bVals = {}
    for i = 1, moveLength * moves do
       table.insert(jVals, math.random(0, 4))
+      table.insert(bVals, math.random(0, 10) / 4)
    end
-   return P.new_indiv(nil, jVals)
+   return P.new_indiv(jVals, bVals)
 end
 
 -- build an individual from string
 function P.indiv_from_string(str)
-   jointStart = string.find(str, ":") + 1
-   jointString = string.sub(str, jointStart)
+   jStart = string.find(str, ":") + 1
+   bStart = string.find(str, ":", jStart) + 1
+   jString = string.sub(str, jStart, bStart - 2)
+   bString = string.sub(str, bStart)
 
-   fitVal = string.sub(str, 1, jointStart - 2)
+   -- using +0 to force to a number
+   fitVal = string.sub(str, 1, jointStart - 2) + 0
    jVals = {}
-   for val in jointString:gmatch("%w+") do
-      -- + 0 to force str -> int conversion
+   bVals = {}
+   for val in jString:gmatch("%w+") do
       table.insert(jVals, val + 0)
    end
-   return P.new_indiv(fitVal, jVals)
+   for val in bString:gmatch("%w+") do
+      table.insert(bVals, val + 0)
+   end
+   return P.new_indiv(jVals, bVals, fitVal)
 end
 
 function P.copy_indiv(indiv)
    local jVals = {}
+   local bVals = {}
    for i = 1, #indiv.jVals do
       table.insert(jVals, indiv.jVals[i])
+      table.insert(bVals, indiv.bVals[i])
    end
-   return P.new_indiv(indiv.fitness, jVals)
+   return P.new_indiv(jVals, bVals, indiv.fitness)
 end
 
 --[[
@@ -128,6 +145,7 @@ Misc
 
 -- append one record to a file
 function P.append_file(filename, string)
+   if filename == nil then return nil end
    filename = datapath..filename
    -- Get old data if any
    local f, res = io.open(filename, "r")
@@ -179,6 +197,7 @@ end
 
 -- saves a population to a file
 function P.save_pop(pop, filename)
+   if filename == nil then return nil end
    filename = datapath..filename
    P.debug("Saving population to "..filename)
    local f, res = io.open(filename, "w")
@@ -188,7 +207,7 @@ function P.save_pop(pop, filename)
    end
 
    for i, indiv in ipairs(pop) do
-      f:write(indiv:format().."\n")
+      f:write(indiv:file_format().."\n")
    end
    f:close()
 end
@@ -211,6 +230,7 @@ end
 
 -- load population from file
 function P.load_pop(filename) 
+   if filename == nil then return nil end
    filename = datapath..filename
 
    P.debug("Loading population from "..filename)
@@ -318,7 +338,7 @@ Fitness functions - different variants
 
 P.get_fitness = {}
 -- Possibly the simplest fitness function - difference of score (from original code)
-function P.get_fitness.plain(wt)
+function P.get_fitness.plain(indiv, wt)
    local uke_score = math.floor(get_player_info(0).injury)
    local tori_score = math.floor(get_player_info(1).injury)
    return tori_score - uke_score
@@ -327,7 +347,7 @@ end
 -- A fitness function that values factures and dismembers (from forum)
 local dismember_value = 10000 -- Dismembered points value
 local fracture_value = 7000 -- Fracture points value
-function P.get_fitness.dismember(wt)
+function P.get_fitness.dismember(indiv, wt)
    local uke_score = math.floor(get_player_info(0).injury)
    local tori_score = math.floor(get_player_info(1).injury)
    for i = 0, 19 do
@@ -347,7 +367,7 @@ end
 
 -- sadly not working on linux version (3.5)
 -- plain fitness, but always 0 when losing (squeakus' second release)
-function P.get_fitness.requirewin(wt)
+function P.get_fitness.requirewin(indiv, wt)
    local uke_score = math.floor(get_player_info(0).injury)
    local tori_score = math.floor(get_player_info(1).injury)
    -- this awards a fitness of zero if tori is disqualified
@@ -364,7 +384,7 @@ end
 
 -- fitness function for wushu
 -- favouring those who dance around longer (disqualification check is a hack - if uke has points)
-function P.get_fitness.wushu(wt)
+function P.get_fitness.wushu(indiv, wt)
    local uke_score = math.floor(get_player_info(0).injury)
    local tori_score = math.floor(get_player_info(1).injury)
    if uke_score ~= 0 then
@@ -375,70 +395,199 @@ function P.get_fitness.wushu(wt)
    end
 end
 
+local move_effort = 1
+local hold_effort = 1
+local relax_effort = 1
+local nop_effort = 0
+-- lazy fitness - favour less movement
+function P.get_fitness.lazy(indiv, wt)
+   local effort = 0
+   for i = 1, #indiv.jVals do
+      local jVal = indiv.jVals[i]
+      if jVal == 1 or jVal == 2 then effort = effort + move_effort
+      elseif jVal == 3 then effort = effort + hold_effort
+      elseif jVal == 4 then effort = effort + relax_effort
+      elseif jVal == 0 then effort = effort + nop_effort
+      end
+   end
+   return P.get_fitness.plain(indiv, wt) / (effort ^ 0.5)
+end
+
 --[[
 GA updating functions
 ]]--
 
--- Mutate the individual by randomly chosing a new int with probability p_mut. Works per codon.
-function P.intflip_mutation(jVals, mutaSize)
-   assert(jVals ~= nil)
-   local mutations = math.random() * mutaSize
-   for i = 1, mutations do
-       jVals[math.floor(math.random() * #jVals) + 1] = math.random(0, 4)
+-- select relative or absolute size based on integer/float
+local function rel_size(total, size)
+   if math.floor(size) == size then
+      -- absolute
+      return size
+   else
+      -- proportional
+      return math.floor(total * size)
    end
 end
 
--- Given two individuals, create a child using one-point crossover.
-function P.onepoint_crossover(p, q)
-   assert(#p == #q)
-   p1 = math.random(1, #p)
-   c = {}
-   for i = 1     , p1 do table.insert(c, p[i]) end
-   for i = p1 + 1, #q do table.insert(c, q[i]) end
-   return c
+-- Mutate the individual by randomly chosing a new int with probability p_mut. Works per codon.
+function P.intflip_mutation(indiv, conf)
+   local mutations = math.random() * rel_size(#indiv.jVals, conf.mutaSize)
+   for i = 1, mutations do
+       pos = math.floor(math.random() * #indiv.jVals) + 1
+       -- check if the mutation passes the block
+       if math.random() > indiv.bVals[pos] then
+          indiv.jVals[pos] = math.random(0, 4)
+       end
+       -- update block randomly
+       indiv.bVals[pos] = indiv.bVals[pos] + (math.random(0, 2) - 1) * conf.blockStep
+       if indiv.bVals[pos] < 0 then indiv.bVals[pos] = 0 end
+       if indiv.bVals[pos] > 1 then indiv.bVals[pos] = 1 end
+   end
 end
 
-function P.twopoint_crossover(p, q)
-   assert(#p == #q)
-   c = {}
-   p1 = math.random(1, #p)
-   p2 = math.random(1, #p)
-   for i = 1     , p1 do table.insert(c, p[i]) end
-   for i = p1 + 1, p2 do table.insert(c, q[i]) end
-   for i = p2 + 1, #q do table.insert(c, p[i]) end
-   return c
+-- Given two individuals, create a child using N-point crossover
+function P.n_point_crossover(p, q, n)
+   assert(#p.jVals == #q.jVals)
+   -- generate crossover points
+   local points
+   for i = 1, n do
+      table.insert(points, math.random(1, #p.jVals))
+   end
+   points:sort()
+   -- empty lists
+   local jVals = {}
+   local bVals = {}
+   -- fill the lists
+   local j = 1
+   local parent = p
+   for i = 1, #p.jVals do
+      -- switch parents if we pass a point
+      while i > points[j] and j <= n do
+         j = j + 1
+         if parent == p then
+            parent = q
+         else
+            parent = p
+         end
+      end
+      -- insert a codon
+      table.insert(jVals, parent.jVals[i])
+      table.insert(bVals, parent.bVals[i])
+   end
+   return P.new_indiv(jVals, bVals)
 end
 
+-- create a child using uniform crossover (randomly select parent for each codon)
 function P.uniform_crossover(p, q)
-   assert(#p == #q)
-   c = {}
-   for i = 1, #q do
+   assert(#p.jVals == #q.jVals)
+   local jVals = {}
+   local bVals = {}
+   local parent = p
+   for i = 1, #p.jVals do
       if math.random() < 0.5 then
-         table.insert(c, p[i])
+         parent = p
       else
-         table.insert(c, q[i])
+         parent = q
+      end
+      table.insert(jVals, parent.jVals[i])
+      table.insert(bVals, parent.bVals[i])
+   end
+   return P.new_indiv(jVals, bVals)
+end
+
+-- Tournament selection algorithm
+function P.tournament(pop, conf)
+   if conf.tourCount == 0 then return end
+   local tourCount = rel_size(#pop, conf.tourCount)
+   local tourSize  = rel_size(#pop, conf.tourSize)
+   P.debug("Running "..tourCount.." tournaments of "..tourSize.." with "..conf.tourProb.." randomness to select survivors")
+   local popsize = #pop
+   local newpop = {}
+   for t = 1, tourCount do
+      -- assemble tournament
+      local tour = {}
+      while #tour < tourSize and #pop > 0 do
+         table.insert(tour, table.remove(pop, math.random(1, #pop)))
+         if next(pop) ~= nil then table.insert(pop, table.remove(pop)) end
+      end
+      P.debug("Assembled tournament of "..#tour..", "..#pop.." left in population")
+
+      -- draw the winner
+      P.sort_pop(tour)
+      for i, v in ipairs(tour) do
+         -- select based on probability or last one with 100% probability
+         if math.random() < conf.tourProb or next(tour, i) == nil then
+            table.insert(newpop, table.remove(tour, i))
+            break
+         end
+      end
+
+      -- end tournament, put contestants back
+      for i, v in ipairs(tour) do
+         table.insert(pop, tour[i])
       end
    end
-   return c
+   -- clean population
+   for i = 1, #pop do
+      table.remove(pop)
+   end
+   -- replace
+   for i = 1, #newpop do
+      table.insert(pop, newpop[i])
+   end
+   P.debug("Tournament reduced population from "..popsize.." to "..#pop)
 end
 
--- Kill unsuccessful individuals
+-- Kill individuals who have been around for too long (to kill elitists)
+function P.kill_old(pop, conf)
+   -- increase age
+   for i = 1, #pop do
+      pop[i].age = pop[i].age + 1
+   end
+
+   if conf.maxAge == 0 then return end
+
+   -- kill
+   P.debug("Killing all individuals older than "..conf.maxAge)
+   local i = 1
+   local popsize = #pop
+   while i < #pop do
+      if pop[i].age > conf.maxAge then
+         P.debug("Killing indiv #"..i.." because of old age")
+         table.remove(pop, i)
+         -- fill the hole
+         table.insert(pop, table.remove(pop))
+      else
+         i = i + 1
+      end
+   end
+
+   P.debug("Killed "..(popsize - #pop).." individuals because of old age")
+end
+
+-- Truncate population to set size
 function P.trunc_pop(pop, conf)
-   local survive = math.floor(table.getn(pop) * conf.truncSize)
+   if conf.truncSize == 0 or conf.truncSize == 1 then return end
+   local survive = rel_size(#pop, conf.truncSize)
    P.debug("Truncating population from "..#pop.." to "..survive.." individuals")
    for i = survive + 1, #pop do
       table.remove(pop, survive + 1)
    end
 end
 
+-- Clear room in population
+function P.shrink_pop(pop, conf)
+   P.kill_old(pop, conf)
+   P.tournament(pop, conf)
+   P.trunc_pop(pop, conf)
+end
+
 -- Generate a new generation (based on old one)
 function P.grow_pop(pop, conf)
    P.debug("Filling population from "..#pop.." to "..conf.popSize.." individuals")
    local survivors = #pop
-   local selfsex = false
 
    -- add random newcomers
-   local randoms = conf.randSize * conf.popSize
+   local randoms = rel_size(conf.popSize, conf.randSize)
    P.debug("Adding "..randoms.." random individuals")
    for i = 1, conf.randSize * conf.popSize do
       table.insert(pop, P.rand_indiv(conf.moves))
@@ -449,22 +598,22 @@ function P.grow_pop(pop, conf)
    P.debug("Adding "..needed.." individuals as crossover children of survivors and randoms")
    for i = 1, needed do
          -- avoid both parents being the same individual
-         if selfsex then
+         if conf.selfsex then
      	      ind1, ind2 = math.random(1, survivors + randoms), math.random(1, survivors + randoms)
          else
      	      ind1, ind2 = math.random(1, survivors + randoms), math.random(1, survivors + randoms - 1)
             if ind2 >= ind1 then ind2 = ind2 + 1 end
          end
          -- generate child
-     	   jVals = P.uniform_crossover(pop[ind1].jVals, pop[ind2].jVals)
-     	   table.insert(pop, P.new_indiv(nil, jVals))
+     	   local indiv = P.uniform_crossover(pop[ind1], pop[ind2])
+     	   table.insert(pop, indiv)
    end
 
    -- mutate non-elite individuales
-   local elite = conf.eliteSize * conf.popSize
+   local elite = rel_size(#pop, conf.eliteSize)
    P.debug("Mutating "..#pop-elite.." individuals (sparing "..elite.." elites)")
    for i = elite + 1, #pop do
-       P.intflip_mutation(pop[i].jVals, conf.mutaSize)
+       P.intflip_mutation(pop[i], conf)
        pop[i].fitness = minfitness
    end
 end

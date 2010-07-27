@@ -47,7 +47,7 @@ local function end_round()
       local best_indiv = pop[1]
       if best_indiv.fitness ~= nil and best_indiv.fitness > bestfit then
          evolib.info("New best individual: "..best_indiv.fitness.." > "..bestfit)
-         evolib.append_file(conf.bestFile, best_indiv:format())
+         evolib.append_file(conf.bestFile, best_indiv:file_format())
          bestfit = best_indiv.fitness
       end
 
@@ -57,7 +57,7 @@ local function end_round()
 
       -- GA steps
       -- kill some individuals
-      evolib.trunc_pop(pop, conf)
+      evolib.shrink_pop(pop, conf)
       -- replace them
       evolib.grow_pop(pop, conf)
 
@@ -80,7 +80,7 @@ end
 -- Executed at the end of round, stores fitness, triggers new round
 local function finish_game(winType)
    local indiv = pop[idx]
-   indiv.fitness = conf.get_fitness(winType)
+   indiv.fitness = conf.get_fitness(indiv, winType)
    cache:save(indiv)
    evolib.info("Finished round (simulation), fitness: "..indiv.fitness)
    if end_round() then
