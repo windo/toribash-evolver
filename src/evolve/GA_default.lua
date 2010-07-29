@@ -23,8 +23,8 @@ c.selfsex = false  -- can both parents of crossover be the same individual - eff
 c.truncSize = 0 -- % that survive the round, 0 or 1 to disable
 c.maxAge = 10   -- max age of an individual, 0 to disable
 c.tourCount = 5 -- number of tournaments to hold, 0 to disable
-c.tourSize  = 2 -- individuals per tournament (2 is common)
-c.tourProb  = 1 -- probability that the best one is selected (usually 1, non-deterministic otherways)
+c.tourSize  = 3 -- individuals per tournament (usually 2)
+c.tourProb  = 1 -- probability that the best one is selected (usually 1)
 
 -- execution settings
 c.loadPrev = true -- continue evolving the previously saved population

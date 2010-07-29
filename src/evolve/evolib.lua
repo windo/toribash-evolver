@@ -8,6 +8,11 @@ Simulation-related functions
 local moveLength = 22
 local minfitness = -10000000
 local datapath = "evolve/data/"
+-- reverse joint mapping
+local rMOVE = {}
+for jName, jId in pairs(JOINTS) do rMOVE[jId] = jName end
+rMOVE[20] = "L_GRIP"
+rMOVE[21] = "L_GRIP"
 
 -- holds "global" variables updated during simulation
 local Simulation = {}
@@ -95,7 +100,25 @@ function _indiv.file_format(self)
 end
 -- as text
 function _indiv.print_format(self)
-   return "Indiv fitness="..self.fitness..", age="..self.age..", jVals="..table.concat(self.jVals, ", ")..", bVals="..table.concat(self.bVals, ", ")
+   local jStr = ""
+   local move = -1
+   for i = 1, #self.jVals do
+      if self.jVals[i] ~= 0 or self.bVals[i] ~= 0 then
+         local mStr = ""
+         local cmove = math.floor((i - 1) / moveLength)
+         if cmove ~= move then
+            move = cmove
+            mStr = string.format("%u: ", move + 1)
+         end
+         local codon = (i - 1) % moveLength
+         local bStr = ""
+         if self.bVals[i] ~= 0 then
+            bStr = string.format("/%.2f", self.bVals[i])
+         end
+         jStr = jStr..string.format(", %s%s=%u%s", mStr, rMOVE[codon], self.jVals[i], bStr)
+      end
+   end
+   return string.format("Indiv fitness=%u age=%u joints={ %s }", self.fitness, self.age, jStr:sub(3))
 end
 
 -- generate random individual
@@ -104,7 +127,7 @@ function P.rand_indiv(moves)
    local bVals = {}
    for i = 1, moveLength * moves do
       table.insert(jVals, math.random(0, 4))
-      table.insert(bVals, math.random(0, 10) / 4)
+      table.insert(bVals, 0)
    end
    return P.new_indiv(jVals, bVals)
 end
@@ -437,10 +460,12 @@ function P.intflip_mutation(indiv, conf)
        if math.random() > indiv.bVals[pos] then
           indiv.jVals[pos] = math.random(0, 4)
        end
-       -- update block randomly
-       indiv.bVals[pos] = indiv.bVals[pos] + (math.random(0, 2) - 1) * conf.blockStep
-       if indiv.bVals[pos] < 0 then indiv.bVals[pos] = 0 end
-       if indiv.bVals[pos] > 1 then indiv.bVals[pos] = 1 end
+       -- update mutation inhibitor randomly
+       if conf.blockStep > 0 then
+          indiv.bVals[pos] = indiv.bVals[pos] + (math.random(0, 2) - 1) * conf.blockStep
+          if indiv.bVals[pos] < 0 then indiv.bVals[pos] = 0 end
+          if indiv.bVals[pos] > 1 then indiv.bVals[pos] = 1 end
+       end
    end
 end
 
@@ -616,6 +641,9 @@ function P.grow_pop(pop, conf)
        P.intflip_mutation(pop[i], conf)
        pop[i].fitness = minfitness
    end
+
+   -- debugging - best individual
+   P.debug("Best: "..pop[1]:print_format())
 end
 
 evolib = P
